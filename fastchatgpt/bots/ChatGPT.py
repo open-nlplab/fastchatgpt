@@ -25,10 +25,10 @@ class ChatGPT:
     def __init__(self):
         self.parse_args()
         self.config = Config(parser)
-        if self.config.data["load_context"]:
-            self.config.data["load_context"] = False
-        else:
+        if self.config.data["no_context"]:
             self.config.data["conversation_id"] = ""
+        else:
+            self.config.data["no_context"] = False
         self.session = None
 
     def parse_args(self):
@@ -39,7 +39,7 @@ class ChatGPT:
         parser.add_argument("--conversation_id", type=str, default="")
         parser.add_argument("--parent_id", type=str, default=str(uuid.uuid4()))
         parser.add_argument("--format", type=str, default="text")
-        parser.add_argument("--load_context", action="store_true")
+        parser.add_argument("--no_context", action="store_true")
         parser.add_argument("--config", type=str, default="chatgpt")
         parser.add_argument("--account_list", type=str, default="")
         parser.add_argument("--access_token", type=str, default="")
@@ -83,7 +83,7 @@ class ChatGPT:
         }
         if self.config.data["conversation_id"] != "" and self.config.data["conversation_id"] != None:
             data["conversation_id"] = self.config.data["conversation_id"]
-        if self.config.data["format"] in ('text', 'stream'):  # todo temporary text
+        if self.config.data["format"] == 'text':
             while True:
                 response = requests.post("https://chat.openai.com/backend-api/conversation", headers=self.get_header(),
                                          data=json.dumps(data), timeout=self.config.data['timeout'])
@@ -107,26 +107,26 @@ class ChatGPT:
             message = response["message"]["content"]["parts"][0]
             yield {'message': message, 'conversation_id': self.config.data["conversation_id"],
                     'parent_id': self.config.data["parent_id"]}
-        # elif self.config.data["format"] == 'stream':
-        #     response = requests.post("https://chat.openai.com/backend-api/conversation", headers=self.get_header(),
-        #                              data=json.dumps(data), stream=True, timeout=self.config.data['timeout'])
-        #     for line in response.iter_lines():
-        #         try:
-        #             line = line.decode('utf-8')
-        #             if line == "":
-        #                 continue
-        #             line = line[6:]
-        #             line = json.loads(line)
-        #             try:
-        #                 message = line["message"]["content"]["parts"][0]
-        #                 self.config.set("parent_id", line["message"]["id"])
-        #                 self.config.set("conversation_id", line["conversation_id"])
-        #             except:
-        #                 continue
-        #             yield {'message': message, 'conversation_id': self.config.data["conversation_id"],
-        #                    'parent_id': self.config.data["parent_id"]}
-        #         except:
-        #             continue
+        elif self.config.data["format"] == 'stream':
+            response = requests.post("https://chat.openai.com/backend-api/conversation", headers=self.get_header(),
+                                     data=json.dumps(data), stream=True, timeout=self.config.data['timeout'])
+            for line in response.iter_lines():
+                try:
+                    line = line.decode('utf-8')
+                    if line == "":
+                        continue
+                    line = line[6:]
+                    line = json.loads(line)
+                    try:
+                        message = line["message"]["content"]["parts"][0]
+                        self.config.set("parent_id", line["message"]["id"])
+                        self.config.set("conversation_id", line["conversation_id"])
+                    except:
+                        continue
+                    yield {'message': message, 'conversation_id': self.config.data["conversation_id"],
+                           'parent_id': self.config.data["parent_id"]}
+                except:
+                    continue
 
     def login(self):
         # the following code are from https://github.com/rawandahmad698/PyChatGPT

@@ -32,7 +32,7 @@ def bot_play():
         os.makedirs(dirname, exist_ok=True)
 
         logger.setLevel(logging.DEBUG)
-        handler = FileHandler(fp, mode='a')
+        handler = FileHandler(fp, mode='a', encoding='utf8')
         formatter = Formatter(fmt='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         handler.setFormatter(formatter)
         handler.setLevel(logging.INFO)
@@ -102,13 +102,20 @@ def bot_play():
         while True:
             try:
                 # TODO here, we need to make it smarter
-                response = next(bot.request(text))
-                show_type.end_waiting()
-                words = response["message"]
-                for word in words.split():
-                    print(word, end=' ', flush=True)
-                    turn_output += word + ' '
-                    time.sleep(random.randint(100, 300)/1000.0)
+                shift = 0
+                for response in bot.request(text):
+                    show_type.end_waiting()
+                    w = response["message"]
+                    print(w[shift:], end='')
+                    shift = len(w)
+                turn_output = response['message']
+                # response = next(bot.request(text))
+                # show_type.end_waiting()
+                # words = response["message"]
+                # for word in words.split():
+                #     print(word, end=' ', flush=True)
+                #     turn_output += word + ' '
+                #     time.sleep(random.randint(100, 300)/1000.0)
                 retry += 1
                 break
             except TLSClientExeption as e:

@@ -24,9 +24,10 @@ class ShowTyping(threading.Thread):
             _text = ''
             while self.print_typing:
                 self.need_clear = True
-                _text = text + '.'*count
                 if count>10:
+                    print(text+' '*16, end='\r')
                     count = 0
+                _text = text + '.'*count
                 count += 1
                 if self.show_time:
                     seconds = round(time.time() - start_time, 1)
