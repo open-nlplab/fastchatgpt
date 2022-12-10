@@ -84,8 +84,78 @@ Working
 </details>
 <details>
 <summary>数据推理</summary>
-Working   
-在给定数据集上使用ChatGPT进行推理
+通过fastchatgpt的推理，通过传入多个账号，可以实现同时调用多个账号进行并行，此外考虑到可能非常
+容易因为网络问题导致需要重新推理，以下示例还会将已经有结果的请求缓存起来，
+下次直接运行的时候会跳过这些已经有结果的请求，使用代码如下
+
+```python
+import os.path
+from fastchatgpt import SimpleBalancer
+import json
+
+# 申明将请求请求结果存放到哪里
+response_path = '/your/path/to/save/result'
+
+# !!!!! 需要自己根据情况修改的部分
+# 读取数据
+...
+# 读取后数据应该类似于下面的结构，每个 key 是用来帮助fastchatgpt追踪这个 sample 是不是已经被标注了(需要为str类型)；value 是一个字典
+#  其中必须要包含'prompt'这个key，并且内容需要为一个 str，这个内容将直接传递给 chatgpt 进行生成，chatgpt返回的结果
+#  会被存到'response'这个key下，所以输入中不要占据这个 key 。
+# prompts = {
+#     '0': {'prompt': 'xxxxx'},
+#     #  fastchatgpt只会使用其中的'prompt'，可以包含其它 key
+#     '1': {'prompt': 'xxxx'},
+# }
+# !!!!!
+
+
+# 以下是缓存已经有响应的文件，防止重复请求
+count = 0
+annotated = {}
+if os.path.exists(response_path):
+    with open(response_path, 'r') as f:
+        annotated = json.load(f)
+    for key in annotated:
+        prompts.pop(key)
+        count += 1
+
+print(f"Intended to annotate {len(prompts)} samples, {count} of them have been annotated.")        
+
+# 初始化一个 Balancer 来协调多个的账号请求
+balancer = SimpleBalancer(accounts='please_see_below')
+responses = balancer.batch_query(prompts)
+annotated.update(responses)
+print(f"Annotated {len(responses)}, left {len(prompts) - len(annotated)} samples to annotate")
+
+# 保存结果
+with open(response_path, 'w') as f:
+    json.dump(annotated, f, indent=2)
+# 结果为一个 dict 文件
+#  {
+#    0: {'prompt': xxx, 'response': xxxx}  # 其中0就是在prompt中对应的0，如果输入中有其它的内容，也会一并保存在这个dict中
+#  
+#  }
+```
+
+account有以下两种
+```text
+(1) List[Dict]，例如
+[{
+    'username': 'username1', 
+    'password': 'password1',
+    'proxies': {'http_proxy': 'http://proxy.com', 'https_proxy': 'http://proxy.com'}  # 可选参数
+}
+]
+(2) str, 传入一个文件地址，文件中的内容应该类似于下面的内容
+username1 password1 
+usernam2 password2
+```
+
+上述代码如果在运行过程中失败，直接尝试再次运行即可。
+
+
+
 </details>
 
 ## Credit

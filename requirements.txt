@@ -7,3 +7,4 @@ svglib
 reportlab
 bs4
 colorama
+chatgptpy==1.0.4

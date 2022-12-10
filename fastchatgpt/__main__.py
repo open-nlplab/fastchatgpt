@@ -1,7 +1,7 @@
 import argparse
 import os
-import random
 import time
+import uuid
 
 from colorama import Style, Fore
 import logging
@@ -11,20 +11,38 @@ from datetime import datetime
 
 from tls_client.exceptions import TLSClientExeption
 
-from fastchatgpt.bots import BOT
 from fastchatgpt.utils.show_typing import ShowTyping
+from pychatgpt import Chat
 
 parser = argparse.ArgumentParser()
 
 
 def bot_play():
     parser.add_argument("--bot", type=str, default="ChatGPT")
+    parser.add_argument('--username', type=str,  required=True, help='Username to login in')
+    parser.add_argument('--password', type=str, required=True, help='Password to login in')
+    parser.add_argument('--proxies', type=str, default='', help='Proxy to use')
     parser.add_argument('--output', type=str, default='play_logs.txt', help='Where to save the dialogue history')
 
     args = parser.parse_known_args()[0]
-    bot = BOT.build(dict(type=vars(args)['bot']))
+
+    proxies = args.proxies
+    if proxies is not None:
+        assert isinstance(proxies, str), 'Only string proxies information is allowed. ' \
+                                         'Such as http_proxy=http://proxy.com+https_proxy=http://proxy.com.'
+        parts = proxies.split('+')
+        _proxies = {}
+        for part in parts:
+            if part.startswith('http_proxy='):
+                _proxies['http'] = part.split('http_proxy=')[1]
+            if part.startswith('https_proxy='):
+                _proxies['https'] = part.split('https_proxy=')[1]
+
     print("Start to log in openai...")
-    bot.login()
+    from pychatgpt import Options
+    options = Options()
+    options.proxies = proxies
+    bot = Chat(email=args.username, password=args.password, options=options)
     logger = logging.getLogger('fastchatgpt')
     if args.output is not None or args.output != 'None':
         fp = os.path.abspath(args.output)
@@ -63,6 +81,7 @@ def bot_play():
                 !help - Show help message
                 !sep {message} - Add a sep message to the log file
                 !exit - Exit the program
+                !refresh - Forget current dialogue history
     """
     print(help_msg)
     bot_prompt = Fore.BLUE+"Bot: "
@@ -91,6 +110,10 @@ def bot_play():
             print(Fore.RED+f"Communicate with Bot {total_time} seconds, every turn takes "
                            f"Bot {response_avg_time} seconds to response."+Style.RESET_ALL)
             break
+        elif text.startswith('!refresh'):
+            bot.conversation_id = None
+            bot.previous_convo_id = str(uuid.uuid4())
+            continue
 
         logger.info(prompt + text)
         # print(bot_prompt, end="", flush=True)
@@ -101,14 +124,10 @@ def bot_play():
         turn_start_time = time.time()
         while True:
             try:
-                # TODO here, we need to make it smarter
-                shift = 0
-                for response in bot.request(text):
-                    show_type.end_waiting()
-                    w = response["message"]
-                    print(w[shift:], end='')
-                    shift = len(w)
-                turn_output = response['message']
+                response = bot.ask(text)
+                show_type.end_waiting()
+                print(response)
+                turn_output = response
                 # response = next(bot.request(text))
                 # show_type.end_waiting()
                 # words = response["message"]
