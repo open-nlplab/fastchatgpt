@@ -142,7 +142,8 @@ class Balancer:
 
 class SimpleBalancer(Balancer):
     def __init__(self, accounts:Union[List[Dict], str], proxies:Union[Dict, str, None]=None,
-                 refresh_dialogue_each_prompt=True, each_query_time_sep=30):
+                 refresh_dialogue_each_prompt=True, each_query_time_sep=30,
+                 skip_account_if_identification_code=True):
         """
         在不同账号之间进行轮询的并行 Balancer，支持传入多个账号，会考虑到当出现了禁止访问后让对应的账号暂停访问1小时。Balancer会首先尝试自动
         登录所有的账号，然后通过这些账号进行轮询访问。
@@ -155,9 +156,11 @@ class SimpleBalancer(Balancer):
             (2) str，类似http_proxy=http://proxy.com+https_proxy=http://proxy.com；
         :param refresh_dialogue_each_prompt: 是否在每次请求后都刷新对话状态，通过这个方式可以使得不同 sample 之间没有影响
         :param each_query_time_sep: 每个账号的连续两次访问间间隔的时间
+        :param skip_account_if_identification_code: 如果某个账号需要输入验证码则跳过这个账号。
         """
         super().__init__(accounts=accounts, proxies=proxies, each_query_time_sep=each_query_time_sep)
         self.refresh_dialogue_each_prompt = refresh_dialogue_each_prompt
+        self.skip_account_if_identification_code = skip_account_if_identification_code
 
     def batch_query(self, prompts:Dict[int, Dict]) -> Dict:
         """
@@ -182,7 +185,6 @@ class SimpleBalancer(Balancer):
                 }
             }
         """
-        break_seconds = max(self.each_query_time_sep//len(self.chats), 2)
         self.responses = {}
         ts = []
         left_prompts = [(idx, pmt) for idx, pmt in prompts.items()]
@@ -193,7 +195,8 @@ class SimpleBalancer(Balancer):
                     idx, prompt = left_prompts.pop()
                     chat_id, chat = self.get_spare_chat()
                     # add random seconds to separate two neighboring request
-                    rand_secs = random.randrange(break_seconds//2*100, break_seconds*100)/100
+                    rand_secs = random.uniform(0, self.each_query_time_sep/len(self.chats))
+                    # rand_secs = random.randrange(break_seconds//2*100, break_seconds*100)/100
                     time.sleep(rand_secs)
                     # send request
                     t = threading.Thread(target=self.send_query, args=(idx, prompt, chat, chat_id, left_prompts))
@@ -240,7 +243,7 @@ class SimpleBalancer(Balancer):
             if self.refresh_dialogue_each_prompt:
                 self.refresh_chat_dialogue(chat)
             if '[Response Text]' in response:  # 大概率是出问题了
-                print(f"Fail to get response:{response}")
+                print(f"Fail to get response:`{response}` with account `{chat.email}`. This sample will be retried later...")
             else:
                 success = True
                 # print(f"Success ask with response:{response} for {chat_id}")

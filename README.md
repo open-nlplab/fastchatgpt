@@ -95,6 +95,9 @@ import json
 
 # 申明将请求请求结果存放到哪里
 response_path = '/your/path/to/save/result'
+# 创建一下文件夹，防止保存失败
+if os.path.dirname(response_path) != '':
+    os.makedirs(os.path.dirname(response_path), exist_ok=True)
 
 # !!!!! 需要自己根据情况修改的部分
 # 读取数据
@@ -129,11 +132,23 @@ annotated.update(responses)
 print(f"Annotated {len(responses)}, left {len(prompts) - len(annotated)} samples to annotate")
 
 # 保存结果
-with open(response_path, 'w') as f:
-    json.dump(annotated, f, indent=2)
+try:
+    with open(response_path, 'w') as f:
+        json.dump(annotated, f, indent=2)
+    print(f"The results are saved to {response_path}...")
+except:
+    # 如果有异常尝试暂时存到一个临时文件，防止白跑了
+    print("The following exception occurs when try to save the result")
+    import traceback
+    from datetime import datetime
+    traceback.print_exc()
+    file_name = os.path.splitext(os.path.basename(response_path))[0]
+    with open(f'{file_name}_tmp.json', 'w') as f:
+        f.write(annotated)
+    print("The results are saved to a temporary file named:{}")
 # 结果为一个 dict 文件
 #  {
-#    0: {'prompt': xxx, 'response': xxxx}  # 其中0就是在prompt中对应的0，如果输入中有其它的内容，也会一并保存在这个dict中
+#    '0': {'prompt': xxx, 'response': xxxx}  # 其中0就是在prompt中对应的0，如果输入中有其它的内容，也会一并保存在这个dict中
 #  
 #  }
 ```
