@@ -169,6 +169,8 @@ usernam2 password2
 
 上述代码如果在运行过程中失败，直接尝试再次运行即可。
 
+#### 如果对query过程有特殊的需求，例如需要chain-of-thought，可以继承SimpleBalancer，并修改send_query函数即可。
+
 
 
 </details>

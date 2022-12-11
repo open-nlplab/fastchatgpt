@@ -13,7 +13,7 @@ with open('requirements.txt', encoding='utf-8') as f:
 
 setup(
     name='fastchatgpt',
-    version='0.0.6',
+    version='0.0.7',
     description='fastchatgpt: A tool to interact with large language model(LLM)',
     long_description=readme,
     long_description_content_type='text/markdown',

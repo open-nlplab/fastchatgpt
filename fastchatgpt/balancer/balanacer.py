@@ -146,7 +146,8 @@ class SimpleBalancer(Balancer):
                  skip_account_if_identification_code=True):
         """
         在不同账号之间进行轮询的并行 Balancer，支持传入多个账号，会考虑到当出现了禁止访问后让对应的账号暂停访问1小时。Balancer会首先尝试自动
-        登录所有的账号，然后通过这些账号进行轮询访问。
+        登录所有的账号，然后通过这些账号进行轮询访问。在访问过程中，如果出现了异常（通过返回的结果中包含了[Response Text]来判断的），该条请求
+        会在之后被重新请求。
 
         :param accounts: (1) str类型，表明该参数为一个文件路径，文件中的内容以每行为单位，每一行以空格分割，第一个元素为账号，第二个元素为
             密码，第三个元素（可选）为当前账号使用的代理，代理的格式需要类似http_proxy=http://proxy.com+https_proxy=http://proxy.com；
@@ -188,24 +189,45 @@ class SimpleBalancer(Balancer):
         self.responses = {}
         ts = []
         left_prompts = [(idx, pmt) for idx, pmt in prompts.items()]
+        total_prompts = len(left_prompts)
         start_time =time.time()
         try:
-            with tqdm(total=len(left_prompts)) as pbar:
-                while len(left_prompts):
-                    idx, prompt = left_prompts.pop()
-                    chat_id, chat = self.get_spare_chat()
-                    # add random seconds to separate two neighboring request
-                    rand_secs = random.uniform(0, self.each_query_time_sep/len(self.chats))
-                    # rand_secs = random.randrange(break_seconds//2*100, break_seconds*100)/100
-                    time.sleep(rand_secs)
-                    # send request
-                    t = threading.Thread(target=self.send_query, args=(idx, prompt, chat, chat_id, left_prompts))
-                    t.start()
-                    ts.append(t)
-                    pbar.update(1)
+            pbar = tqdm(total=total_prompts)
+            while len(self.responses) != total_prompts:  # 在没有标注完成前，不会退出
+                # 这种情况一般出现在最后几个标注，等待一下，防止最后有标注失败了
+                wait_count = 0
+                if len(left_prompts) == 0 and len(self.responses) != total_prompts:
+                    time.sleep(1)
+                    wait_count += 1
+                    if wait_count%120 == 0:
+                        pbar.write(f'It has been waiting for {wait_count} seconds to get all samples annotated, if it is '
+                                   f'not expected, please ctrl+c')
+                if len(left_prompts) == 0:  # 说明不需要标注了
+                    break
+                idx, prompt = left_prompts.pop()
+                chat_id, chat = self.get_spare_chat()
+                # add random seconds to separate two neighboring request
+                rand_secs = random.uniform(0, self.each_query_time_sep/len(self.chats))
+                # rand_secs = random.randrange(break_seconds//2*100, break_seconds*100)/100
+                time.sleep(rand_secs)
+                # send request
+                t = threading.Thread(target=self.send_query, args=(idx, prompt, chat, chat_id, left_prompts))
+                t.start()
+
+                # 清除掉之前已经运行结束的线程
+                i = 0
+                for i in range(len(ts)):
+                    if ts[i].is_alive():
+                       break
+                ts = ts[i:]
+                ts.append(t)
+                pbar.update(1)
 
             for t in ts:
                 t.join()
+                pbar.update(1)
+
+            pbar.close()
         except:
             import traceback
             traceback.print_exc()
